@@ -4,9 +4,8 @@ updates:
     directory: /
     schedule:
       interval: cron
-      cron: '0 18 * * *'
-      
-groups:
-  github-actions:
-    patterns:
-      - '*'
+      cronjob: '0 18 * * *'
+    groups:
+      github-actions:
+        patterns:
+          - '*'
