@@ -30,5 +30,5 @@ jobs:
       run: sbt compile Test/compile test
     
     - name: Upload dependency graph
-      uses: scalacenter/sbt-dependency-submission@v2
+      uses: scalacenter/sbt-dependency-submission@v3
       
