@@ -72,8 +72,7 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
       val serverProperty = new ServerProperty(
         new Origin(rpOrigin),
         rpId,
-        challenge,
-        null
+        new DefaultChallenge()
       )
 
       val registrationData =
@@ -156,7 +155,6 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
         val serverProperty = new ServerProperty(
           new Origin(rpOrigin),
           rpId,
-          new DefaultChallenge(),
           null
         )
 
@@ -167,19 +165,6 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
           signature
         )
 
-        // Create a new attested credential data with the stored credential
-        val attestedCredentialData = new AttestedCredentialData(
-          new AAGUID(Array.fill[Byte](16)(0)),
-          credential.credentialId,
-          credential.coseKey
-        )
-
-        val authenticator = new com.webauthn4j.authenticator.AuthenticatorImpl(
-          attestedCredentialData,
-          new NoneAttestationStatement(),
-          credential.signatureCount
-        )
-
         val allowCredentials = List(
           new PublicKeyCredentialDescriptor(
             PublicKeyCredentialType.PUBLIC_KEY,
@@ -187,6 +172,20 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
             null
           )
         )
+
+        val attestedCredentialData = new AttestedCredentialData(
+          new AAGUID(Array.fill[Byte](16)(0)),
+          credential.credentialId,
+          credential.coseKey
+        )
+
+        val authenticator = new com.webauthn4j.authenticator.Authenticator {
+          override def getAttestedCredentialData: AttestedCredentialData = attestedCredentialData
+          override def getCounter: Long = credential.signatureCount
+          override def setCounter(count: Long): Unit = {
+            WebAuthnCredential.store(credential.copy(signatureCount = count))
+          }
+        }
 
         val authenticationParameters = new AuthenticationParameters(
           serverProperty,
