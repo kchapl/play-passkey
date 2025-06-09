@@ -4,7 +4,7 @@ import play.api.ApplicationLoader
 import play.api.ApplicationLoader.Context
 import play.api.BuiltInComponentsFromContext
 import play.api.routing.Router
-import controllers.{HomeController, AssetsComponents}
+import controllers.{HomeController, PasskeyController, AssetsComponents}
 
 class AppComponents(context: Context)
     extends BuiltInComponentsFromContext(context)
@@ -14,7 +14,9 @@ class AppComponents(context: Context)
 
   // Controllers
   lazy val homeController = new HomeController(controllerComponents)
+  lazy val passkeyController = new PasskeyController(controllerComponents)
 
   // Router
-  lazy val router: Router = new _root_.router.Routes(httpErrorHandler, homeController, assets)
+  lazy val router: Router =
+    new _root_.router.Routes(httpErrorHandler, homeController, passkeyController, assets)
 }
