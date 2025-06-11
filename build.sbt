@@ -17,6 +17,16 @@ lazy val root = (project in file("."))
       "com.webauthn4j" % "webauthn4j-core" % "0.29.3.RELEASE",
       "com.webauthn4j" % "webauthn4j-util" % "0.29.3.RELEASE",
       "com.google.guava" % "guava" % "32.1.2-jre",
-      "org.slf4j" % "slf4j-api" % "2.0.7"
+      "org.slf4j" % "slf4j-api" % "2.0.7",
+      "com.fasterxml.jackson.core" % "jackson-databind" % "2.14.3",
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.14.3"
+    )
+  )
+  .settings(
+    dependencyOverrides := Seq(
+      "com.fasterxml.jackson.core" % "jackson-databind" % "2.14.3",
+      "com.fasterxml.jackson.core" % "jackson-core" % "2.14.3",
+      "com.fasterxml.jackson.core" % "jackson-annotations" % "2.14.3",
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.14.3"
     )
   )

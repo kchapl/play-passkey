@@ -15,6 +15,7 @@ import com.webauthn4j.data.attestation.authenticator._
 import com.webauthn4j.data.attestation.statement.NoneAttestationStatement
 import com.webauthn4j.authenticator.{Authenticator, AuthenticatorImpl}
 import com.webauthn4j.util.Base64Util
+import com.fasterxml.jackson.databind.ObjectMapper
 
 import scala.jdk.CollectionConverters._
 import javax.inject.Inject
@@ -59,31 +60,44 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
 
       val challenge = new DefaultChallenge()
 
-      val publicKeyJson = Json.obj(
-        "challenge" -> Base64Util.encodeToString(challenge.getValue),
-        "rp" -> Json.obj(
-          "name" -> "Play Passkey Demo",
-          "id" -> rpId
-        ),
-        "user" -> Json.obj(
-          "id" -> Base64Util.encodeToString(userHandle),
-          "name" -> userId,
-          "displayName" -> userId
-        ),
-        "pubKeyCredParams" -> Json.arr(
-          Json.obj(
-            "type" -> WebAuthn4jWrapper.PUBLIC_KEY_TYPE,
-            "alg" -> WebAuthn4jWrapper.ES256_ALGORITHM
-          )
-        ),
-        "authenticatorSelection" -> Json.obj(
-          "residentKey" -> "discouraged",
-          "userVerification" -> "preferred",
-          "authenticatorAttachment" -> "platform"
+      val rpEntity = new PublicKeyCredentialRpEntity(rpId)
+
+      val userEntity = new PublicKeyCredentialUserEntity(
+        userHandle,
+        userId,
+        userId
+      )
+
+      val pubKeyCredParams = List(
+        new PublicKeyCredentialParameters(
+          PublicKeyCredentialType.PUBLIC_KEY,
+          WebAuthn4jWrapper.createPublicKeyCredentialParameters().head.getAlg
         )
       )
 
-      Ok(Json.obj("publicKey" -> publicKeyJson))
+      val authenticatorSelection = new AuthenticatorSelectionCriteria(
+        AuthenticatorAttachment.PLATFORM,
+        ResidentKeyRequirement.DISCOURAGED,
+        UserVerificationRequirement.PREFERRED
+      )
+
+      val creationOptions = new PublicKeyCredentialCreationOptions(
+        rpEntity,
+        userEntity,
+        challenge,
+        pubKeyCredParams.asJava,
+        null, // timeout
+        null, // excludeCredentials
+        authenticatorSelection,
+        AttestationConveyancePreference.NONE,
+        null // extensions
+      )
+
+      // Convert to JSON using Jackson
+      val mapper = new ObjectMapper()
+      val json = mapper.writeValueAsString(creationOptions)
+
+      Ok(Json.obj("publicKey" -> Json.parse(json)))
   }
 
   def finishRegistration(userId: String): Action[JsValue] = Action(parse.json) { implicit request =>
