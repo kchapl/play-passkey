@@ -9,8 +9,10 @@ import com.webauthn4j.server.ServerProperty
 import com.webauthn4j.util.Base64UrlUtil
 
 import scala.jdk.CollectionConverters._
+import java.util.{Collections => JCollections}
 
 object WebAuthn4jWrapper {
+  // Create a non-strict manager to be more tolerant of different implementations
   private val webAuthnManager = WebAuthnManager.createNonStrictWebAuthnManager()
 
   // Constants
@@ -37,8 +39,12 @@ object WebAuthn4jWrapper {
   def validateRegistration(
       registrationData: RegistrationData,
       parameters: RegistrationParameters
-  ): Unit = {
-    webAuthnManager.validate(registrationData, parameters)
+  ): RegistrationData = {
+    // Note: Using validate method is still the recommended approach in 0.29.3
+    // We accept the deprecation warning as the newer methods are not available yet
+    @annotation.nowarn("cat=deprecation")
+    def validate = webAuthnManager.validate(registrationData, parameters)
+    validate
   }
 
   def parseAuthenticationRequest(
@@ -59,7 +65,11 @@ object WebAuthn4jWrapper {
   def validateAuthentication(
       authenticationData: AuthenticationData,
       parameters: AuthenticationParameters
-  ): Unit = {
-    webAuthnManager.validate(authenticationData, parameters)
+  ): AuthenticationData = {
+    // Note: Using validate method is still the recommended approach in 0.29.3
+    // We accept the deprecation warning as the newer methods are not available yet
+    @annotation.nowarn("cat=deprecation")
+    def validate = webAuthnManager.validate(authenticationData, parameters)
+    validate
   }
 }

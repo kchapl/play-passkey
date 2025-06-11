@@ -14,8 +14,8 @@ lazy val root = (project in file("."))
     ),
     libraryDependencies ++= Seq(
       "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.1" % Test,
-      "com.webauthn4j" % "webauthn4j-core" % "0.30.0.RELEASE",
-      "com.webauthn4j" % "webauthn4j-util" % "0.30.0.RELEASE",
+      "com.webauthn4j" % "webauthn4j-core" % "0.29.3.RELEASE",
+      "com.webauthn4j" % "webauthn4j-util" % "0.29.3.RELEASE",
       "com.google.guava" % "guava" % "32.1.2-jre",
       "org.slf4j" % "slf4j-api" % "2.0.7"
     )

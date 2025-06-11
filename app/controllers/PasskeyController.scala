@@ -5,27 +5,52 @@ import play.api.mvc._
 import play.api.libs.json._
 import utils.WebAuthn4jWrapper
 
+import com.webauthn4j.WebAuthnManager
 import com.webauthn4j.data._
 import com.webauthn4j.data.client._
 import com.webauthn4j.data.client.challenge.DefaultChallenge
-import com.webauthn4j.data.client.challenge.Challenge
 import com.webauthn4j.data.extension.client._
 import com.webauthn4j.server.ServerProperty
 import com.webauthn4j.data.attestation.authenticator._
-import com.webauthn4j.data.attestation.statement._
-import com.webauthn4j.util.Base64UrlUtil
+import com.webauthn4j.data.attestation.statement.NoneAttestationStatement
+import com.webauthn4j.authenticator.{Authenticator, AuthenticatorImpl}
+import com.webauthn4j.util.Base64Util
 
 import scala.jdk.CollectionConverters._
 import javax.inject.Inject
 import scala.util.{Try, Success, Failure}
 import scala.concurrent.ExecutionContext
 import java.security.SecureRandom
+import java.util.{Collections => JCollections}
 
 class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: ExecutionContext)
     extends AbstractController(cc) {
   private val rpId = "localhost" // Replace with your domain in production
   private val rpOrigin = "http://localhost:9000" // Replace with your origin in production
   private val random = new SecureRandom()
+
+  private def createServerProperty(challenge: DefaultChallenge): ServerProperty = {
+    val origins = JCollections.singleton(new Origin(rpOrigin))
+    new ServerProperty(origins, rpId, challenge)
+  }
+
+  // Wrapper to create an authenticator instance from credential data
+  @annotation.nowarn("cat=deprecation")
+  private def createAuthenticator(
+      credentialId: Array[Byte],
+      coseKey: COSEKey,
+      signCount: Long
+  ): Authenticator = {
+    new AuthenticatorImpl(
+      new AttestedCredentialData(
+        new AAGUID(Array.fill[Byte](16)(0)), // Default AAGUID
+        credentialId,
+        coseKey
+      ),
+      new NoneAttestationStatement(),
+      signCount
+    )
+  }
 
   def startRegistration(userId: String): Action[AnyContent] = Action {
     implicit request: Request[AnyContent] =>
@@ -35,13 +60,13 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
       val challenge = new DefaultChallenge()
 
       val publicKeyJson = Json.obj(
-        "challenge" -> Base64UrlUtil.encodeToString(challenge.getValue),
+        "challenge" -> Base64Util.encodeToString(challenge.getValue),
         "rp" -> Json.obj(
           "name" -> "Play Passkey Demo",
           "id" -> rpId
         ),
         "user" -> Json.obj(
-          "id" -> Base64UrlUtil.encodeToString(userHandle),
+          "id" -> Base64Util.encodeToString(userHandle),
           "name" -> userId,
           "displayName" -> userId
         ),
@@ -52,8 +77,9 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
           )
         ),
         "authenticatorSelection" -> Json.obj(
-          "requireResidentKey" -> false,
-          "userVerification" -> "preferred"
+          "residentKey" -> "discouraged",
+          "userVerification" -> "preferred",
+          "authenticatorAttachment" -> "platform"
         )
       )
 
@@ -63,17 +89,12 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
   def finishRegistration(userId: String): Action[JsValue] = Action(parse.json) { implicit request =>
     val result = Try {
       val clientDataJSON =
-        Base64UrlUtil.decode((request.body \ "response" \ "clientDataJSON").as[String])
+        Base64Util.decode((request.body \ "response" \ "clientDataJSON").as[String])
       val attestationObject =
-        Base64UrlUtil.decode((request.body \ "response" \ "attestationObject").as[String])
+        Base64Util.decode((request.body \ "response" \ "attestationObject").as[String])
 
       val challenge = new DefaultChallenge()
-
-      val serverProperty = new ServerProperty(
-        new Origin(rpOrigin),
-        rpId,
-        new DefaultChallenge()
-      )
+      val serverProperty = createServerProperty(challenge)
 
       val registrationData =
         WebAuthn4jWrapper.parseRegistrationRequest(attestationObject, clientDataJSON)
@@ -119,12 +140,12 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
         val challenge = new DefaultChallenge()
 
         val publicKeyJson = Json.obj(
-          "challenge" -> Base64UrlUtil.encodeToString(challenge.getValue),
+          "challenge" -> Base64Util.encodeToString(challenge.getValue),
           "rpId" -> rpId,
           "allowCredentials" -> Json.arr(
             Json.obj(
               "type" -> WebAuthn4jWrapper.PUBLIC_KEY_TYPE,
-              "id" -> Base64UrlUtil.encodeToString(credential.credentialId)
+              "id" -> Base64Util.encodeToString(credential.credentialId)
             )
           ),
           "userVerification" -> "preferred"
@@ -147,20 +168,17 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
           .getOrElse(throw new IllegalStateException("User not registered"))
 
         val clientDataJSON =
-          Base64UrlUtil.decode((request.body \ "response" \ "clientDataJSON").as[String])
-        val authenticatorData =
-          Base64UrlUtil.decode((request.body \ "response" \ "authenticatorData").as[String])
-        val signature = Base64UrlUtil.decode((request.body \ "response" \ "signature").as[String])
+          Base64Util.decode((request.body \ "response" \ "clientDataJSON").as[String])
+        val rawAuthenticatorData =
+          Base64Util.decode((request.body \ "response" \ "authenticatorData").as[String])
+        val signature = Base64Util.decode((request.body \ "response" \ "signature").as[String])
 
-        val serverProperty = new ServerProperty(
-          new Origin(rpOrigin),
-          rpId,
-          null
-        )
+        val challenge = new DefaultChallenge()
+        val serverProperty = createServerProperty(challenge)
 
         val authenticationData = WebAuthn4jWrapper.parseAuthenticationRequest(
           credential.credentialId,
-          authenticatorData,
+          rawAuthenticatorData,
           clientDataJSON,
           signature
         )
@@ -169,30 +187,22 @@ class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: Ex
           new PublicKeyCredentialDescriptor(
             PublicKeyCredentialType.PUBLIC_KEY,
             credential.credentialId,
-            null
+            JCollections.emptySet()
           )
         )
 
-        val attestedCredentialData = new AttestedCredentialData(
-          new AAGUID(Array.fill[Byte](16)(0)),
+        val authenticator = createAuthenticator(
           credential.credentialId,
-          credential.coseKey
+          credential.coseKey,
+          credential.signatureCount
         )
 
-        val authenticator = new com.webauthn4j.authenticator.Authenticator {
-          override def getAttestedCredentialData: AttestedCredentialData = attestedCredentialData
-          override def getCounter: Long = credential.signatureCount
-          override def setCounter(count: Long): Unit = {
-            WebAuthnCredential.store(credential.copy(signatureCount = count))
-          }
-        }
-
+        @annotation.nowarn("cat=deprecation")
         val authenticationParameters = new AuthenticationParameters(
           serverProperty,
           authenticator,
           allowCredentials.map(_.getId).asJava,
-          true,
-          true
+          true // User verification required
         )
 
         WebAuthn4jWrapper.validateAuthentication(authenticationData, authenticationParameters)
