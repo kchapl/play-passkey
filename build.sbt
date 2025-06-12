@@ -10,10 +10,8 @@ lazy val root = (project in file("."))
       "com.webauthn4j" % "webauthn4j-util" % "0.29.3.RELEASE",
       "org.slf4j" % "slf4j-api" % "2.0.17" % Runtime,
       "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.1" % Test
-    )
-  )
-  .settings(
-    dependencyOverrides := Seq(
+    ),
+    dependencyOverrides ++= Seq(
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.19.0" % Runtime,
       "com.fasterxml.jackson.core" % "jackson-core" % "2.19.0" % Runtime,
       "com.fasterxml.jackson.core" % "jackson-annotations" % "2.19.0" % Runtime,

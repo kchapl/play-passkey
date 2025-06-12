@@ -27,7 +27,13 @@ jobs:
       uses: sbt/setup-sbt@v1    
     
     - name: Run tests
-      run: sbt compile Test/compile test
+      run: >
+        sbt 
+        compile 
+        Test/compile 
+        scalafmtCheckAll 
+        scalafmtCheckSbt 
+        test
     
     - name: Upload dependency graph
       uses: scalacenter/sbt-dependency-submission@v3
