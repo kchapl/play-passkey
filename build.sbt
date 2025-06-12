@@ -17,7 +17,7 @@ lazy val root = (project in file("."))
       "com.webauthn4j" % "webauthn4j-core" % "0.29.3.RELEASE",
       "com.webauthn4j" % "webauthn4j-util" % "0.29.3.RELEASE",
       "com.google.guava" % "guava" % "32.1.3-jre",
-      "org.slf4j" % "slf4j-api" % "2.0.7",
+      "org.slf4j" % "slf4j-api" % "2.0.17",
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.19.0",
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.19.0"
     )
