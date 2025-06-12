@@ -32,7 +32,7 @@ jobs:
         compile 
         Test/compile 
         scalafmtCheckAll 
-        scalafmtCheckSbt 
+        scalafmtSbtCheck
         test
     
     - name: Upload dependency graph
