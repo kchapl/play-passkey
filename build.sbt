@@ -19,7 +19,7 @@ lazy val root = (project in file("."))
       "com.google.guava" % "guava" % "32.1.2-jre",
       "org.slf4j" % "slf4j-api" % "2.0.7",
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.19.0",
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.14.3"
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.19.0"
     )
   )
   .settings(
@@ -27,6 +27,6 @@ lazy val root = (project in file("."))
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.19.0",
       "com.fasterxml.jackson.core" % "jackson-core" % "2.19.0",
       "com.fasterxml.jackson.core" % "jackson-annotations" % "2.19.0",
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.14.3"
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.19.0"
     )
   )
