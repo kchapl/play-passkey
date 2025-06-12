@@ -27,6 +27,7 @@ lazy val root = (project in file("."))
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.14.3",
       "com.fasterxml.jackson.core" % "jackson-core" % "2.14.3",
       "com.fasterxml.jackson.core" % "jackson-annotations" % "2.14.3",
-      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.14.3"
+      "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.14.3",
+      "commons-beanutils" % "commons-beanutils" % "1.11.0"
     )
   )
