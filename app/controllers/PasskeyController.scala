@@ -10,7 +10,7 @@ import scala.util.{Try, Success, Failure}
 class PasskeyController(
     cc: ControllerComponents,
     webAuthnService: WebAuthnService
-)(implicit ec: ExecutionContext)
+)(using ec: ExecutionContext)
     extends AbstractController(cc) {
 
   def startRegistration(userId: String): Action[Unit] = Action(parse.empty) { _ =>
@@ -20,7 +20,7 @@ class PasskeyController(
     }
   }
 
-  def finishRegistration(userId: String): Action[JsValue] = Action(parse.json) { implicit request =>
+  def finishRegistration(userId: String): Action[JsValue] = Action(parse.json) { request =>
     val attestationObject = (request.body \ "response" \ "attestationObject").as[String]
     val clientDataJSON = (request.body \ "response" \ "clientDataJSON").as[String]
 
@@ -38,7 +38,7 @@ class PasskeyController(
   }
 
   def finishAuthentication(userId: String): Action[JsValue] = Action(parse.json) {
-    implicit request: Request[JsValue] =>
+    (request: Request[JsValue]) =>
       val authenticatorData = (request.body \ "response" \ "authenticatorData").as[String]
       val clientDataJSON = (request.body \ "response" \ "clientDataJSON").as[String]
       val signature = (request.body \ "response" \ "signature").as[String]
@@ -54,7 +54,7 @@ class PasskeyController(
       }
   }
 
-  def protectedEndpoint: Action[AnyContent] = Action { implicit request: Request[AnyContent] =>
+  def protectedEndpoint: Action[AnyContent] = Action { (request: Request[AnyContent]) =>
     // In a real application, you would validate the session here
     Unauthorized("Please authenticate first")
   }
