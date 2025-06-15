@@ -18,13 +18,12 @@ import com.webauthn4j.util.Base64Util
 import com.fasterxml.jackson.databind.ObjectMapper
 
 import scala.jdk.CollectionConverters._
-import javax.inject.Inject
 import scala.util.{Try, Success, Failure}
 import scala.concurrent.ExecutionContext
 import java.security.SecureRandom
 import java.util.{Collections => JCollections}
 
-class PasskeyController @Inject() (val cc: ControllerComponents)(implicit ec: ExecutionContext)
+class PasskeyController(cc: ControllerComponents)(implicit ec: ExecutionContext)
     extends AbstractController(cc) {
   private val rpId = "localhost" // Replace with your domain in production
   private val rpOrigin = "http://localhost:9000" // Replace with your origin in production
