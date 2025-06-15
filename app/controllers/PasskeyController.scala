@@ -13,12 +13,11 @@ class PasskeyController(
 )(implicit ec: ExecutionContext)
     extends AbstractController(cc) {
 
-  def startRegistration(userId: String): Action[AnyContent] = Action {
-    implicit request: Request[AnyContent] =>
-      webAuthnService.createRegistrationOptions(userId) match {
-        case Success(json) => Ok(Json.parse(json))
-        case Failure(e)    => BadRequest(Json.obj("error" -> e.getMessage))
-      }
+  def startRegistration(userId: String): Action[Unit] = Action(parse.empty) { _ =>
+    webAuthnService.createRegistrationOptions(userId) match {
+      case Success(json) => Ok(Json.parse(json))
+      case Failure(e)    => BadRequest(Json.obj("error" -> e.getMessage))
+    }
   }
 
   def finishRegistration(userId: String): Action[JsValue] = Action(parse.json) { implicit request =>
@@ -31,12 +30,11 @@ class PasskeyController(
     }
   }
 
-  def startAuthentication(userId: String): Action[AnyContent] = Action {
-    implicit request: Request[AnyContent] =>
-      webAuthnService.createAuthenticationOptions(userId) match {
-        case Success(json) => Ok(Json.parse(json))
-        case Failure(e)    => BadRequest(Json.obj("error" -> e.getMessage))
-      }
+  def startAuthentication(userId: String): Action[Unit] = Action(parse.empty) { _ =>
+    webAuthnService.createAuthenticationOptions(userId) match {
+      case Success(json) => Ok(Json.parse(json))
+      case Failure(e)    => BadRequest(Json.obj("error" -> e.getMessage))
+    }
   }
 
   def finishAuthentication(userId: String): Action[JsValue] = Action(parse.json) {

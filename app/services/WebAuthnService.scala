@@ -77,13 +77,19 @@ class WebAuthnServiceImpl(
 ) extends WebAuthnService {
   private val webAuthnManager = WebAuthnManager.createNonStrictWebAuthnManager()
 
-  def createRegistrationOptions(userId: String): Try[String] = Try {
+  override def createRegistrationOptions(userId: String): Try[String] = {
     val userHandle = new Array[Byte](32)
     random.nextBytes(userHandle)
 
     val challenge = new DefaultChallenge()
+
     val rpEntity = new PublicKeyCredentialRpEntity(webAuthnConfig.rpId)
-    val userEntity = new PublicKeyCredentialUserEntity(userHandle, userId, userId)
+
+    val userEntity = new PublicKeyCredentialUserEntity(
+      userHandle,
+      userId,
+      userId
+    )
 
     val pubKeyCredParams = List(
       new PublicKeyCredentialParameters(
@@ -110,132 +116,168 @@ class WebAuthnServiceImpl(
       null // extensions
     )
 
-    val mapper = new com.fasterxml.jackson.databind.ObjectMapper()
-    mapper.writeValueAsString(creationOptions)
+    // Convert to JSON using Jackson
+    val mapper = new ObjectMapper()
+    val json = mapper.writeValueAsString(creationOptions)
+
+    Success(Json.stringify(Json.obj("publicKey" -> Json.parse(json))))
   }
 
-  def verifyRegistration(
+  override def verifyRegistration(
       userId: String,
       attestationObject: String,
       clientDataJSON: String
-  ): Try[Unit] = Try {
-    val attestationObjectBytes = Base64Util.decode(attestationObject)
-    val clientDataJSONBytes = Base64Util.decode(clientDataJSON)
+  ): Try[Unit] = {
+    val result = Try {
+      val decodedClientDataJSON = Base64Util.decode(clientDataJSON)
+      val decodedAttestationObject = Base64Util.decode(attestationObject)
 
-    val challenge = new DefaultChallenge()
-    val serverProperty = createServerProperty(challenge)
-    val registrationData = parseRegistrationRequest(attestationObjectBytes, clientDataJSONBytes)
-    val pubKeyCredParams = createPublicKeyCredentialParameters()
+      val challenge = new DefaultChallenge()
+      val serverProperty = createServerProperty(
+        challenge,
+        webAuthnConfig.rpOrigin,
+        webAuthnConfig.rpId
+      )
 
-    val registrationParameters = new RegistrationParameters(
-      serverProperty,
-      pubKeyCredParams.asJava,
-      false,
-      false
-    )
-
-    webAuthnManager.validate(registrationData, registrationParameters)
-
-    val attestedCredentialData =
-      registrationData.getAttestationObject.getAuthenticatorData.getAttestedCredentialData
-    val credential = models.WebAuthnCredential(
-      userId = userId,
-      credentialId = attestedCredentialData.getCredentialId,
-      coseKey = attestedCredentialData.getCOSEKey,
-      signatureCount =
-        registrationData.getAttestationObject.getAuthenticatorData.getSignCount.toLong
-    )
-
-    models.WebAuthnCredential.store(credential)
-  }
-
-  def createAuthenticationOptions(userId: String): Try[String] = Try {
-    val credential = models.WebAuthnCredential
-      .findByUserId(userId)
-      .getOrElse(throw new IllegalStateException("User not registered"))
-
-    val challenge = new DefaultChallenge()
-
-    val publicKeyJson = Json.obj(
-      "challenge" -> Base64Util.encodeToString(challenge.getValue),
-      "rpId" -> webAuthnConfig.rpId,
-      "allowCredentials" -> Json.arr(
-        Json.obj(
-          "type" -> "public-key",
-          "id" -> Base64Util.encodeToString(credential.credentialId)
+      val registrationRequest =
+        new RegistrationRequest(decodedAttestationObject, decodedClientDataJSON)
+      val registrationData = webAuthnManager.parse(registrationRequest)
+      val pubKeyCredParams = List(
+        new PublicKeyCredentialParameters(
+          PublicKeyCredentialType.PUBLIC_KEY,
+          COSEAlgorithmIdentifier.ES256
         )
-      ),
-      "userVerification" -> "preferred"
-    )
+      )
 
-    Json.stringify(Json.obj("publicKey" -> publicKeyJson))
+      val registrationParameters = new RegistrationParameters(
+        serverProperty,
+        pubKeyCredParams.asJava,
+        false,
+        false
+      )
+
+      webAuthnManager.validate(registrationData, registrationParameters)
+
+      val attestedCredentialData =
+        registrationData.getAttestationObject.getAuthenticatorData.getAttestedCredentialData
+      val credential = models.WebAuthnCredential(
+        userId = userId,
+        credentialId = attestedCredentialData.getCredentialId,
+        coseKey = attestedCredentialData.getCOSEKey,
+        signatureCount =
+          registrationData.getAttestationObject.getAuthenticatorData.getSignCount.toLong
+      )
+
+      models.WebAuthnCredential.store(credential)
+    }
+
+    result
   }
 
-  def verifyAuthentication(
+  override def createAuthenticationOptions(userId: String): Try[String] = {
+    val result = Try {
+      val credential = models.WebAuthnCredential
+        .findByUserId(userId)
+        .getOrElse(throw new IllegalStateException("User not registered"))
+
+      val challenge = new DefaultChallenge()
+
+      val publicKeyJson = Json.obj(
+        "challenge" -> Base64Util.encodeToString(challenge.getValue),
+        "rpId" -> webAuthnConfig.rpId,
+        "allowCredentials" -> Json.arr(
+          Json.obj(
+            "type" -> "public-key",
+            "id" -> Base64Util.encodeToString(credential.credentialId)
+          )
+        ),
+        "userVerification" -> "preferred"
+      )
+
+      Json.stringify(Json.obj("publicKey" -> publicKeyJson))
+    }
+
+    result
+  }
+
+  override def verifyAuthentication(
       userId: String,
       authenticatorData: String,
       clientDataJSON: String,
       signature: String
-  ): Try[Unit] = Try {
-    val credential = models.WebAuthnCredential
-      .findByUserId(userId)
-      .getOrElse(throw new IllegalStateException("User not registered"))
+  ): Try[Unit] = {
+    val result = Try {
+      val credential = models.WebAuthnCredential
+        .findByUserId(userId)
+        .getOrElse(throw new IllegalStateException("User not registered"))
 
-    val authenticatorDataBytes = Base64Util.decode(authenticatorData)
-    val clientDataJSONBytes = Base64Util.decode(clientDataJSON)
-    val signatureBytes = Base64Util.decode(signature)
+      val decodedClientDataJSON = Base64Util.decode(clientDataJSON)
+      val decodedAuthenticatorData = Base64Util.decode(authenticatorData)
+      val decodedSignature = Base64Util.decode(signature)
 
-    val challenge = new DefaultChallenge()
-    val serverProperty = createServerProperty(challenge)
+      val challenge = new DefaultChallenge()
+      val serverProperty = createServerProperty(
+        challenge,
+        webAuthnConfig.rpOrigin,
+        webAuthnConfig.rpId
+      )
 
-    val authenticationData = parseAuthenticationRequest(
-      credential.credentialId,
-      authenticatorDataBytes,
-      clientDataJSONBytes,
-      signatureBytes
-    )
-
-    val allowCredentials = List(
-      new PublicKeyCredentialDescriptor(
-        PublicKeyCredentialType.PUBLIC_KEY,
+      val authenticationRequest = new AuthenticationRequest(
         credential.credentialId,
-        JCollections.emptySet()
+        decodedAuthenticatorData,
+        decodedClientDataJSON,
+        decodedSignature
       )
-    )
+      val authenticationData = webAuthnManager.parse(authenticationRequest)
 
-    val authenticator = createAuthenticator(
-      credential.credentialId,
-      credential.coseKey,
-      credential.signatureCount
-    )
-
-    @annotation.nowarn("cat=deprecation")
-    val authenticationParameters = new AuthenticationParameters(
-      serverProperty,
-      authenticator,
-      allowCredentials.map(_.getId).asJava,
-      true // User verification required
-    )
-
-    webAuthnManager.validate(authenticationData, authenticationParameters)
-
-    models.WebAuthnCredential.store(
-      credential.copy(
-        signatureCount = authenticationData.getAuthenticatorData.getSignCount.toLong
+      val allowCredentials = List(
+        new PublicKeyCredentialDescriptor(
+          PublicKeyCredentialType.PUBLIC_KEY,
+          credential.credentialId,
+          JCollections.emptySet()
+        )
       )
-    )
+
+      val authenticator = createAuthenticator(
+        credential.credentialId,
+        credential.coseKey,
+        credential.signatureCount
+      )
+
+      @annotation.nowarn("cat=deprecation")
+      val authenticationParameters = new AuthenticationParameters(
+        serverProperty,
+        authenticator,
+        allowCredentials.map(_.getId).asJava,
+        true // User verification required
+      )
+
+      webAuthnManager.validate(authenticationData, authenticationParameters)
+
+      models.WebAuthnCredential.store(
+        credential.copy(
+          signatureCount = authenticationData.getAuthenticatorData.getSignCount.toLong
+        )
+      )
+    }
+
+    result
   }
 
   // Private helper methods
-  private def createServerProperty(challenge: DefaultChallenge): ServerProperty = {
-    val origins = JCollections.singleton(new Origin(webAuthnConfig.rpOrigin))
-    new ServerProperty(origins, webAuthnConfig.rpId, challenge)
+  private def createServerProperty(
+      challenge: DefaultChallenge,
+      origin: String,
+      rpId: String
+  ): ServerProperty = {
+    val origins = JCollections.singleton(new Origin(origin))
+    new ServerProperty(origins, rpId, challenge)
   }
 
   private def createAuthenticator(
       credentialId: Array[Byte],
       coseKey: COSEKey,
-      signCount: Long
+      signatureCount: Long
   ): Authenticator = {
     new AuthenticatorImpl(
       new AttestedCredentialData(
@@ -244,39 +286,7 @@ class WebAuthnServiceImpl(
         coseKey
       ),
       new NoneAttestationStatement(),
-      signCount
+      signatureCount
     )
-  }
-
-  private def createPublicKeyCredentialParameters(): List[PublicKeyCredentialParameters] = {
-    List(
-      new PublicKeyCredentialParameters(
-        PublicKeyCredentialType.PUBLIC_KEY,
-        COSEAlgorithmIdentifier.ES256
-      )
-    )
-  }
-
-  private def parseRegistrationRequest(
-      attestationObject: Array[Byte],
-      clientDataJSON: Array[Byte]
-  ): RegistrationData = {
-    val request = new RegistrationRequest(attestationObject, clientDataJSON)
-    webAuthnManager.parse(request)
-  }
-
-  private def parseAuthenticationRequest(
-      credentialId: Array[Byte],
-      rawAuthenticatorData: Array[Byte],
-      clientDataJSON: Array[Byte],
-      signature: Array[Byte]
-  ): AuthenticationData = {
-    val request = new AuthenticationRequest(
-      credentialId,
-      rawAuthenticatorData,
-      clientDataJSON,
-      signature
-    )
-    webAuthnManager.parse(request)
   }
 }
