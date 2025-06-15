@@ -3,17 +3,10 @@ package controllers
 import models.WebAuthnCredential
 import play.api.mvc._
 import play.api.libs.json._
-import utils.WebAuthn4jWrapper
-
-import com.webauthn4j.WebAuthnManager
+import services.{WebAuthnService, WebAuthnConfig}
 import com.webauthn4j.data._
 import com.webauthn4j.data.client._
 import com.webauthn4j.data.client.challenge.DefaultChallenge
-import com.webauthn4j.data.extension.client._
-import com.webauthn4j.server.ServerProperty
-import com.webauthn4j.data.attestation.authenticator._
-import com.webauthn4j.data.attestation.statement.NoneAttestationStatement
-import com.webauthn4j.authenticator.{Authenticator, AuthenticatorImpl}
 import com.webauthn4j.util.Base64Util
 import com.fasterxml.jackson.databind.ObjectMapper
 
@@ -23,34 +16,13 @@ import scala.concurrent.ExecutionContext
 import java.security.SecureRandom
 import java.util.{Collections => JCollections}
 
-class PasskeyController(cc: ControllerComponents)(implicit ec: ExecutionContext)
+class PasskeyController(
+    cc: ControllerComponents,
+    webAuthnService: WebAuthnService,
+    webAuthnConfig: WebAuthnConfig,
+    random: SecureRandom
+)(implicit ec: ExecutionContext)
     extends AbstractController(cc) {
-  private val rpId = "localhost" // Replace with your domain in production
-  private val rpOrigin = "http://localhost:9000" // Replace with your origin in production
-  private val random = new SecureRandom()
-
-  private def createServerProperty(challenge: DefaultChallenge): ServerProperty = {
-    val origins = JCollections.singleton(new Origin(rpOrigin))
-    new ServerProperty(origins, rpId, challenge)
-  }
-
-  // Wrapper to create an authenticator instance from credential data
-  @annotation.nowarn("cat=deprecation")
-  private def createAuthenticator(
-      credentialId: Array[Byte],
-      coseKey: COSEKey,
-      signCount: Long
-  ): Authenticator = {
-    new AuthenticatorImpl(
-      new AttestedCredentialData(
-        new AAGUID(Array.fill[Byte](16)(0)), // Default AAGUID
-        credentialId,
-        coseKey
-      ),
-      new NoneAttestationStatement(),
-      signCount
-    )
-  }
 
   def startRegistration(userId: String): Action[AnyContent] = Action {
     implicit request: Request[AnyContent] =>
@@ -59,7 +31,7 @@ class PasskeyController(cc: ControllerComponents)(implicit ec: ExecutionContext)
 
       val challenge = new DefaultChallenge()
 
-      val rpEntity = new PublicKeyCredentialRpEntity(rpId)
+      val rpEntity = new PublicKeyCredentialRpEntity(webAuthnConfig.rpId)
 
       val userEntity = new PublicKeyCredentialUserEntity(
         userHandle,
@@ -67,12 +39,7 @@ class PasskeyController(cc: ControllerComponents)(implicit ec: ExecutionContext)
         userId
       )
 
-      val pubKeyCredParams = List(
-        new PublicKeyCredentialParameters(
-          PublicKeyCredentialType.PUBLIC_KEY,
-          WebAuthn4jWrapper.createPublicKeyCredentialParameters().head.getAlg
-        )
-      )
+      val pubKeyCredParams = webAuthnService.createPublicKeyCredentialParameters()
 
       val authenticatorSelection = new AuthenticatorSelectionCriteria(
         AuthenticatorAttachment.PLATFORM,
@@ -107,11 +74,15 @@ class PasskeyController(cc: ControllerComponents)(implicit ec: ExecutionContext)
         Base64Util.decode((request.body \ "response" \ "attestationObject").as[String])
 
       val challenge = new DefaultChallenge()
-      val serverProperty = createServerProperty(challenge)
+      val serverProperty = webAuthnService.createServerProperty(
+        challenge,
+        webAuthnConfig.rpOrigin,
+        webAuthnConfig.rpId
+      )
 
       val registrationData =
-        WebAuthn4jWrapper.parseRegistrationRequest(attestationObject, clientDataJSON)
-      val pubKeyCredParams = WebAuthn4jWrapper.createPublicKeyCredentialParameters()
+        webAuthnService.parseRegistrationRequest(attestationObject, clientDataJSON)
+      val pubKeyCredParams = webAuthnService.createPublicKeyCredentialParameters()
 
       val registrationParameters = new RegistrationParameters(
         serverProperty,
@@ -120,7 +91,7 @@ class PasskeyController(cc: ControllerComponents)(implicit ec: ExecutionContext)
         false
       )
 
-      WebAuthn4jWrapper.validateRegistration(registrationData, registrationParameters)
+      webAuthnService.validateRegistration(registrationData, registrationParameters)
 
       val attestedCredentialData =
         registrationData.getAttestationObject.getAuthenticatorData.getAttestedCredentialData
@@ -154,10 +125,10 @@ class PasskeyController(cc: ControllerComponents)(implicit ec: ExecutionContext)
 
         val publicKeyJson = Json.obj(
           "challenge" -> Base64Util.encodeToString(challenge.getValue),
-          "rpId" -> rpId,
+          "rpId" -> webAuthnConfig.rpId,
           "allowCredentials" -> Json.arr(
             Json.obj(
-              "type" -> WebAuthn4jWrapper.PUBLIC_KEY_TYPE,
+              "type" -> "public-key",
               "id" -> Base64Util.encodeToString(credential.credentialId)
             )
           ),
@@ -187,9 +158,13 @@ class PasskeyController(cc: ControllerComponents)(implicit ec: ExecutionContext)
         val signature = Base64Util.decode((request.body \ "response" \ "signature").as[String])
 
         val challenge = new DefaultChallenge()
-        val serverProperty = createServerProperty(challenge)
+        val serverProperty = webAuthnService.createServerProperty(
+          challenge,
+          webAuthnConfig.rpOrigin,
+          webAuthnConfig.rpId
+        )
 
-        val authenticationData = WebAuthn4jWrapper.parseAuthenticationRequest(
+        val authenticationData = webAuthnService.parseAuthenticationRequest(
           credential.credentialId,
           rawAuthenticatorData,
           clientDataJSON,
@@ -204,7 +179,7 @@ class PasskeyController(cc: ControllerComponents)(implicit ec: ExecutionContext)
           )
         )
 
-        val authenticator = createAuthenticator(
+        val authenticator = webAuthnService.createAuthenticator(
           credential.credentialId,
           credential.coseKey,
           credential.signatureCount
@@ -218,7 +193,7 @@ class PasskeyController(cc: ControllerComponents)(implicit ec: ExecutionContext)
           true // User verification required
         )
 
-        WebAuthn4jWrapper.validateAuthentication(authenticationData, authenticationParameters)
+        webAuthnService.validateAuthentication(authenticationData, authenticationParameters)
 
         WebAuthnCredential.store(
           credential.copy(
