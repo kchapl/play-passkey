@@ -16,6 +16,10 @@ import scala.jdk.CollectionConverters._
 import java.util.{Collections => JCollections}
 import scala.util.{Try, Success, Failure}
 import java.security.SecureRandom
+import com.webauthn4j.data.extension.client.{
+  AuthenticationExtensionsClientInputs,
+  RegistrationExtensionClientInput
+}
 
 trait WebAuthnService {
 
@@ -109,11 +113,11 @@ class WebAuthnServiceImpl(
       userEntity,
       challenge,
       pubKeyCredParams.asJava,
-      null, // timeout
-      null, // excludeCredentials
+      None.orNull, // timeout
+      JCollections.emptyList(), // excludeCredentials
       authenticatorSelection,
       AttestationConveyancePreference.NONE,
-      null // extensions
+      new AuthenticationExtensionsClientInputs[RegistrationExtensionClientInput]() // extensions
     )
 
     // Convert to JSON using Jackson
