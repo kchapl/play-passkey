@@ -14,6 +14,7 @@ import play.api.Mode
 import play.api.Configuration
 import services.{WebAuthnService, WebAuthnServiceImpl, WebAuthnConfig, WebAuthnConfigImpl}
 import java.security.SecureRandom
+import scala.concurrent.ExecutionContext
 
 class AppComponents(context: Context)
     extends BuiltInComponentsFromContext(context)
@@ -25,9 +26,9 @@ class AppComponents(context: Context)
   private val environment = context.environment
 
   // Services
-  private val webAuthnService: WebAuthnService = new WebAuthnServiceImpl
-  private val webAuthnConfig: WebAuthnConfig = new WebAuthnConfigImpl(config)
+  private val webAuthnConfig = new WebAuthnConfigImpl(config)
   private val secureRandom = new SecureRandom()
+  private val webAuthnService = new WebAuthnServiceImpl(webAuthnConfig, secureRandom)
 
   // Error handler
   override lazy val httpErrorHandler: HttpErrorHandler = new DefaultHttpErrorHandler(
@@ -41,9 +42,7 @@ class AppComponents(context: Context)
   lazy val homeController = new HomeController(controllerComponents)
   lazy val passkeyController = new PasskeyController(
     controllerComponents,
-    webAuthnService,
-    webAuthnConfig,
-    secureRandom
+    webAuthnService
   )
 
   // Router
