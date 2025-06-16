@@ -14,7 +14,7 @@ lazy val root = (project in file("."))
     dependencyOverrides ++= Seq(
       "com.fasterxml.jackson.core" % "jackson-databind" % "2.19.0" % Runtime,
       "com.fasterxml.jackson.core" % "jackson-core" % "2.19.0" % Runtime,
-      "com.fasterxml.jackson.core" % "jackson-annotations" % "2.19.0" % Runtime,
+      "com.fasterxml.jackson.core" % "jackson-annotations" % "2.19.1" % Runtime,
       "com.fasterxml.jackson.module" %% "jackson-module-scala" % "2.19.0" % Runtime,
       "commons-beanutils" % "commons-beanutils" % "1.11.0" % Runtime
     )
